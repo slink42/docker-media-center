@@ -3,163 +3,145 @@ services:
     jackett:
         image: linuxserver/jackett:90
         container_name: jackett
-        restart: always
+        restart: unless-stopped
         ports:
             - 9117:9117
         environment:
             - VIRTUAL_HOST=jackett.htpc
-            - PGID=1000
-            - PUID=1000
         volumes:
-            - $HOME/.config/jackett:/config
-            - /etc/localtime:/etc/localtime:ro
-            - $HOME/Downloads/torrents/completed/Movies:/downloads
+            - jackett_config:/config
+            - /host_mnt/m/Torrents:/downloads
+            - /host_mnt/m:/media
+        networks:
+            - htpc
 
     dashboard:
         image: chimpchimp/manage-this-node
         container_name: dashboard
-        restart: always
-        network_mode: "bridge"
+        restart: unless-stopped
         ports:
             - 3000:3000
         environment:
             - VIRTUAL_HOST=dashboard.htpc
-            - PGID=1000
-            - PUID=1000
         volumes:
-            - $HOME/.config/dashboard:/config
-            - /etc/localtime:/etc/localtime:ro
-            - $HOME/Downloads/torrents/completed/Movies:/downloads
-
-    portainer:
-        image: portainer/portainer
-        container_name: portainer
-        restart: always
-        network_mode: "bridge"
-        ports:
-            - "9000:9000"
-        volumes:
-            - /home/ina/.config/portainer:/data:rw
-            - /var/run/docker.sock:/tmp/docker.sock:ro
-            - /etc/localtime:/etc/localtime:ro
+            - dashboard_config:/config
+            - /host_mnt/m/Torrents:/downloads
+            - /host_mnt/m:/media
+        networks:
+            - htpc
 
     nginx-proxy:
         image: jwilder/nginx-proxy
         container_name: nginx-proxy
+        restart: always
         ports:
             - "80:80"
+            - "443:443"
         volumes:
-            - /var/run/docker.sock:/tmp/docker.sock:ro
+            - VIRTUAL_PORT=80
+            - VIRTUAL_PORT=443
+            - /var/run/docker.sock:/var/run/docker.sock:ro
+            - nginx-proxy_config:/data:rw
+            - nginx_certs:/etc/nginx/certs:ro
+            - nginx_dhparam:/etc/nginx/dhparam:ro
+        networks:
+            - htpc
 
     emby:
         image: emby/embyserver
         container_name: emby
-        # net: host
+        restart: unless-stopped
         ports:
             - 8096:8096
         volumes:
-            - /etc/localtime:/etc/localtime:ro
-            - $HOME/.config/embyserver:/config
-            - /media/My Passport/peliculas:/media
+            - emby_config:/config
+            - /host_mnt/m:/media
         environment:
             - VIRTUAL_PORT=8096
             - VIRTUAL_HOST=emby.htpc
             - AUTO_UPDATES_ON=true
-            - APP_UID=1000
-            - APP_GID=1000
-
-    ubot:
-        image: inakiabt/utorrent-bot
-        container_name: ubot
-        restart: always
-        links:
-            - utorrent
-        env_file: $HOME/.config/ubot/env
-
-    mrpotato:
-        image: rolfkoenders/potato
-        container_name: mrpotato
-        restart: always
-        links:
-            - couchpotato
-        env_file: $HOME/.config/mrpotato/env
-
-    dashboard:
-        image: chimpchimp/manage-this-node
-        container_name: dashboard
-        ports:
-            - 3000:3000
-        volumes:
-            - $HOME/.config/dashboard:/config
-        restart: always
-        environment:
-            - VIRTUAL_HOST=dashboard.htpc
-            - PGID=1000
-            - PUID=1000
-
-    couchpotato:
-        image: linuxserver/couchpotato
-        container_name: couchpotato
-        # network_mode: "host"
-        volumes:
-            - /etc/localtime:/etc/localtime:ro
-            - $HOME/.config/couchpotato:/config
-            - $HOME/Downloads/torrents/completed/Movies:/downloads
-            - /media/My Passport/peliculas:/movies
-        ports:
-            - 5050:5050
-        links:
-            - jackett
-            - plex
-            - utorrent
-        restart: always
-        environment:
-            - VIRTUAL_HOST=couchpotato.htpc
-            - PGID=1000
-            - PUID=1000
+        networks:
+            - htpc
 
     plex:
         image: linuxserver/plex
         container_name: plex
-        network_mode: "host"
         ports:
-            - 32400:32400
+            - 32401:32400
         volumes:
-            - /etc/localtime:/etc/localtime:ro
-            - $HOME/.config/plexmediaserver:/config
-            - /media/My Passport/peliculas:/data/movies
+            - plex_config:/config
+            - plex_transcode:/transcode
+            - /host_mnt/m:/media
         restart: always
         environment:
             - VIRTUAL_PORT=32400
             - VIRTUAL_HOST=plex.htpc
             - VERSION=latest
-            - PGID=1000
-            - PUID=1000
 
     utorrent:
         image: ekho/utorrent
         container_name: utorrent
-        # network_mode: "host"
         volumes:
-            - /etc/localtime:/etc/localtime:ro
-            - $HOME/Downloads:/data
-            - $HOME/.config/utorrent:/utorrent
+            - /host_mnt/m:/media
+            - utorrent_config:/utorrent/settings
+            - utorrent_data:/utorrent/data
         ports:
-            - 8080:8080
+            - 8282:8080
             - 6881:6881
-        restart: always
+        restart: unless-stopped
         environment:
-            - VIRTUAL_PORT=8080
+            - VIRTUAL_PORT=8282
             - VIRTUAL_HOST=utorrent.htpc
+        networks:
+            - htpc
 
-    hamachi:
-        image: gfjardim/hamachi
-        container_name: hamachi
-        network_mode: "host"
+    sonarr:
+        image: 	linuxserver/sonarr
+        container_name: sonarr
         volumes:
-            - /etc/localtime:/etc/localtime:ro
-            - $HOME/.config/hamachi:/config
+            - sonarr_config:/config
+            - /host_mnt/m:/media
+            - /host_mnt/m/Torrents:/downloads
+        ports:
+            - 8989:8989
         restart: always
         environment:
-            - ACCOUNT="myemail@gmail.com"
-        privileged: true
+            - VIRTUAL_PORT=8989
+            - VIRTUAL_HOST=sonarr.htpc
+        networks:
+            - htpc
+
+    radarr:
+        image: 	linuxserver/radarr
+        container_name: radarr
+        volumes:
+            - radarr_config:/config
+            - /host_mnt/m:/media
+            - /host_mnt/m/Torrents:/downloads
+            - /host_mnt/m/Movies:/movies
+        ports:
+            - 7878:7878
+        restart: always
+        environment:
+            - VIRTUAL_PORT=7878
+            - VIRTUAL_HOST=radarr.htpc
+        networks:
+            - htpc
+            
+    tautulli:
+        image: 	linuxserver/tautulli
+        container_name: tautulli
+        volumes:
+            - tautulli_config:/config
+            - tautulli_logs:/logs
+        ports:
+            - 8181:8181
+        restart: always
+        environment:
+            - VIRTUAL_PORT=8181
+            - VIRTUAL_HOST=tautulli.htpc
+        networks:
+            - htpc
+network:
+    htpc:
+            
